@@ -1,0 +1,8 @@
+
+MetaTrader5
+pandas
+numpy
+requests
+PySide6
+matplotlib
+PySide6-WebEngine

@@ -1,0 +1,1031 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Gold Sniper Pro</title>
+
+<script src="qrc:///qtwebchannel/qwebchannel.js"></script>
+<script src="./lightweight-charts.standalone.production.js"></script>
+
+<style>
+* {
+    box-sizing: border-box;
+}
+
+html, body {
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    overflow: hidden;
+}
+
+body {
+    background: #131722;
+    color: #d1d4dc;
+    font-family: Arial, sans-serif;
+}
+
+#topbar {
+    height: 48px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0 10px;
+    background: #1e222d;
+    border-bottom: 1px solid #363c4e;
+    white-space: nowrap;
+    overflow-x: auto;
+}
+
+.brand {
+    font-weight: bold;
+    color: white;
+    margin-right: 12px;
+    flex-shrink: 0;
+}
+
+button {
+    background: #2a2e39;
+    border: 1px solid #434958;
+    color: #d1d4dc;
+    padding: 7px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+button:hover {
+    background: #363c4e;
+}
+
+button.active {
+    background: #2962ff;
+    color: white;
+    border-color: #2962ff;
+}
+
+#fullscreen {
+    background: #2962ff;
+    color: white;
+    border-color: #2962ff;
+}
+
+#status {
+    margin-left: auto;
+    font-size: 12px;
+    color: #26a69a;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+#chart {
+    width: 100%;
+    height: calc(100% - 48px);
+}
+
+.tool-label {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 12px;
+    padding: 0 5px;
+    flex-shrink: 0;
+}
+
+.tool-label input {
+    accent-color: #2962ff;
+}
+
+.separator {
+    height: 25px;
+    border-left: 1px solid #434958;
+    margin: 0 3px;
+    flex-shrink: 0;
+}
+
+@media (max-width: 900px) {
+    .brand {
+        font-size: 11px;
+        margin-right: 3px;
+    }
+
+    button {
+        padding: 6px 7px;
+    }
+}
+</style>
+</head>
+
+<body>
+
+<div id="topbar">
+
+    <span class="brand">AI GOLD SNIPER PRO</span>
+
+    <button class="tf active" data-tf="M1">1m</button>
+    <button class="tf" data-tf="M5">5m</button>
+    <button class="tf" data-tf="M15">15m</button>
+    <button class="tf" data-tf="M30">30m</button>
+    <button class="tf" data-tf="H1">1h</button>
+
+    <span class="separator"></span>
+
+    <button id="zoomOut" title="Zoom out horizontally">−</button>
+    <button id="zoomIn" title="Zoom in horizontally">+</button>
+    <button id="fitChart">Fit All</button>
+    <button id="autoPrice">Auto Price</button>
+<button id="follow">Go to Live</button>
+    <button id="fullscreen">Full Screen</button>
+
+    <span id="status">Loading chart...</span>
+
+</div>
+
+<div id="chart"></div>
+
+<script>
+
+(function () {
+
+    const statusEl = document.getElementById("status");
+    const container = document.getElementById("chart");
+
+    // =========================================
+    // LIBRARY CHECK
+    // =========================================
+
+    if (typeof LightweightCharts === "undefined") {
+
+        statusEl.textContent =
+            "Chart library not loaded. Check local JS file.";
+
+        console.error("LightweightCharts library missing.");
+        return;
+    }
+
+    const {
+        createChart,
+        CandlestickSeries,
+        LineSeries,
+        CrosshairMode,
+        createSeriesMarkers
+    } = LightweightCharts;
+
+    if (
+        !createChart ||
+        !CandlestickSeries ||
+        !LineSeries ||
+        !createSeriesMarkers
+    ) {
+
+        statusEl.textContent =
+            "Incorrect Lightweight Charts version. Use v5.3.0.";
+
+        return;
+    }
+
+    // =========================================
+    // CHART CONFIGURATION
+    // =========================================
+
+    const chart = createChart(container, {
+
+        width: container.clientWidth,
+        height: container.clientHeight,
+
+        layout: {
+            background: {
+                color: "#131722"
+            },
+
+            textColor: "#d1d4dc",
+
+            panes: {
+                separatorColor: "#363c4e",
+                separatorHoverColor: "#2962ff"
+            }
+        },
+
+        grid: {
+            vertLines: {
+                color: "#202633"
+            },
+
+            horzLines: {
+                color: "#202633"
+            }
+        },
+
+        crosshair: {
+            mode: CrosshairMode.Normal
+        },
+
+        rightPriceScale: {
+            borderColor: "#363c4e",
+            autoScale: true,
+
+            scaleMargins: {
+                top: 0.08,
+                bottom: 0.08
+            },
+
+            alignLabels: true
+        },
+
+        timeScale: {
+            borderColor: "#363c4e",
+
+            timeVisible: true,
+            secondsVisible: false,
+
+            rightOffset: 5,
+            barSpacing: 8,
+            minBarSpacing: 2,
+
+            fixLeftEdge: false,
+            fixRightEdge: false
+        },
+
+        handleScroll: {
+            mouseWheel: false,
+            pressedMouseMove: true,
+            horzTouchDrag: true,
+            vertTouchDrag: true
+        },
+
+        handleScale: {
+            mouseWheel: false,
+            pinch: true,
+
+            axisPressedMouseMove: {
+                time: true,
+                price: true
+            },
+
+            axisDoubleClickReset: true
+        }
+
+    });
+
+    // =========================================
+    // CANDLESTICKS
+    // =========================================
+
+    const candles = chart.addSeries(CandlestickSeries, {
+
+        upColor: "#26a69a",
+        downColor: "#ef5350",
+
+        borderVisible: false,
+
+        wickUpColor: "#26a69a",
+        wickDownColor: "#ef5350",
+
+        priceLineVisible: true
+
+    });
+
+    // =========================================
+    // BOLLINGER BANDS (VISIBLE)
+    // =========================================
+
+    const bbUpper = chart.addSeries(LineSeries, {
+        color: "#ab7cff",
+        lineWidth: 1,
+        lineStyle: 2,
+        title: "BB Upper",
+        lastValueVisible: true,
+        priceLineVisible: false
+    });
+
+    const bbLower = chart.addSeries(LineSeries, {
+        color: "#ab7cff",
+        lineWidth: 1,
+        lineStyle: 2,
+        title: "BB Lower",
+        lastValueVisible: true,
+        priceLineVisible: false
+    });
+
+    // Indicators are intentionally not rendered in the chart.
+    // Python-side indicator calculations remain active for signal analysis.
+
+    // =========================================
+    // STATE
+    // =========================================
+
+    const markersPlugin = createSeriesMarkers(candles, []);
+
+    const mainPriceScale = candles.priceScale();
+
+    let pyBridge = null;
+
+    let followLive = true;
+    let firstDataLoaded = false;
+    let isFullscreen = false;
+
+    let supportLine = null;
+    let resistanceLine = null;
+
+    let lastCandleCount = 0;
+
+
+// =========================================
+// HISTORICAL RANGE LINES
+// =========================================
+
+// Keep old range series permanently.
+// Do not remove them after breakout or breakdown.
+const rangeSeriesById = new Map();
+
+const RANGE_COLORS = {
+    H1: "#ab7cff",
+    M15: "#00bcd4",
+    M5: "#ffb300"
+};
+
+function allowedRangeTimeframes(chartTimeframe) {
+    const allowed = {
+        H1: ["H1"],
+        M30: ["H1"],
+        M15: ["H1", "M15"],
+        M5: ["H1", "M15", "M5"],
+        M1: ["H1", "M15", "M5"]
+    };
+
+    return allowed[String(chartTimeframe || "M1").toUpperCase()]
+        || ["H1", "M15", "M5"];
+}
+
+    // =========================================
+    // HORIZONTAL ZOOM
+    // =========================================
+
+    function zoomHorizontalAt(factor, mouseX) {
+
+        const timeScale = chart.timeScale();
+
+        const range = timeScale.getVisibleLogicalRange();
+
+        if (!range) return;
+
+        const logicalAtMouse =
+            timeScale.coordinateToLogical(mouseX);
+
+        const anchor = Number.isFinite(logicalAtMouse)
+            ? logicalAtMouse
+            : (range.from + range.to) / 2;
+
+        const newFrom =
+            anchor + (range.from - anchor) * factor;
+
+        const newTo =
+            anchor + (range.to - anchor) * factor;
+
+        if (
+            Number.isFinite(newFrom) &&
+            Number.isFinite(newTo) &&
+            newTo > newFrom
+        ) {
+
+            timeScale.setVisibleLogicalRange({
+                from: newFrom,
+                to: newTo
+            });
+
+            followLive = false;
+        }
+    }
+
+    // =========================================
+    // ZOOM BUTTONS
+    // =========================================
+
+    document.getElementById("zoomIn").onclick = function () {
+
+        zoomHorizontalAt(
+            0.80,
+            Math.max(1, container.clientWidth - mainPriceScale.width()) / 2
+        );
+
+    };
+
+    document.getElementById("zoomOut").onclick = function () {
+
+        zoomHorizontalAt(
+            1.25,
+            Math.max(1, container.clientWidth - mainPriceScale.width()) / 2
+        );
+
+    };
+
+    // =========================================
+    // FIT ALL HISTORICAL CANDLES
+    // =========================================
+
+    document.getElementById("fitChart").onclick = function () {
+
+        chart.timeScale().fitContent();
+
+        mainPriceScale.setAutoScale(true);
+
+        followLive = false;
+
+        statusEl.textContent =
+            `Showing all ${candles.data().length} candles`;
+
+    };
+
+    // =========================================
+    // AUTO PRICE
+    // =========================================
+
+    document.getElementById("autoPrice").onclick = function () {
+
+        mainPriceScale.setAutoScale(true);
+
+        statusEl.textContent = "Price scale: Auto";
+
+    };
+
+    // =========================================
+
+    // =========================================
+// DRAW HISTORICAL RANGE LINES
+// =========================================
+
+function isValidRangePoints(points) {
+    if (!Array.isArray(points) || points.length < 2) {
+        return false;
+    }
+
+    let previousTime = -Infinity;
+
+    for (const point of points) {
+        if (
+            !point ||
+            point.time === null ||
+            point.time === undefined ||
+            point.time === "" ||
+            point.value === null ||
+            point.value === undefined ||
+            point.value === ""
+        ) {
+            return false;
+        }
+
+        const time = Number(point.time);
+        const value = Number(point.value);
+
+        if (
+            !Number.isFinite(time) ||
+            !Number.isFinite(value) ||
+            time <= previousTime
+        ) {
+            return false;
+        }
+
+        previousTime = time;
+    }
+
+    return true;
+}
+
+function normalizeRangePoints(points) {
+    return points.map(point => ({
+        time: Number(point.time),
+        value: Number(point.value)
+    }));
+}
+
+function updateRangeLines(ranges, chartTimeframe) {
+
+    const visibleTimeframes =
+        allowedRangeTimeframes(chartTimeframe);
+
+    // Existing historical lines ko hide/show karo.
+    // Kisi bhi old range ko delete mat karo.
+    for (const seriesPair of rangeSeriesById.values()) {
+
+        const visible =
+            visibleTimeframes.includes(seriesPair.timeframe);
+
+        seriesPair.upper.applyOptions({ visible });
+        seriesPair.lower.applyOptions({ visible });
+    }
+
+    if (!Array.isArray(ranges)) {
+        return;
+    }
+
+    ranges.forEach(range => {
+
+        if (
+            !range ||
+            range.id === undefined ||
+            range.id === null
+        ) {
+            return;
+        }
+
+        const timeframe =
+            String(range.timeframe || "").toUpperCase();
+
+        const color = RANGE_COLORS[timeframe];
+
+        if (!color) {
+            return;
+        }
+
+        if (
+            !isValidRangePoints(range.upper) ||
+            !isValidRangePoints(range.lower)
+        ) {
+            return;
+        }
+
+        const upperData =
+            normalizeRangePoints(range.upper);
+
+        const lowerData =
+            normalizeRangePoints(range.lower);
+
+        const rangeKey =
+            `${timeframe}:${String(range.id)}`;
+
+        let existing = rangeSeriesById.get(rangeKey);
+
+        // Create series only once.
+        if (!existing) {
+
+            const upperSeries = chart.addSeries(
+                LineSeries,
+                {
+                    color: color,
+                    lineWidth: 2,
+                    lineStyle: 0,
+                    title: `${timeframe} Range Upper`,
+                    lastValueVisible: false,
+                    priceLineVisible: false,
+                    crosshairMarkerVisible: false,
+                    visible: visibleTimeframes.includes(timeframe)
+                }
+            );
+
+            const lowerSeries = chart.addSeries(
+                LineSeries,
+                {
+                    color: color,
+                    lineWidth: 2,
+                    lineStyle: 2,
+                    title: `${timeframe} Range Lower`,
+                    lastValueVisible: false,
+                    priceLineVisible: false,
+                    crosshairMarkerVisible: false,
+                    visible: visibleTimeframes.includes(timeframe)
+                }
+            );
+
+            existing = {
+                timeframe: timeframe,
+                upper: upperSeries,
+                lower: lowerSeries
+            };
+
+            rangeSeriesById.set(rangeKey, existing);
+        }
+
+        // Update sloping boundaries.
+        existing.upper.setData(upperData);
+        existing.lower.setData(lowerData);
+
+    });
+}
+
+    // =========================================
+    // PYTHON DATA UPDATE
+    // =========================================
+
+    window.updateChart = function (payload) {
+
+        if (
+            !payload ||
+            !Array.isArray(payload.candles)
+        ) {
+            return;
+        }
+
+        const incomingCandles = payload.candles;
+
+        if (incomingCandles.length === 0) {
+            return;
+        }
+
+        // =====================================
+        // UPDATE ALL SERIES
+        // =====================================
+
+        candles.setData(incomingCandles);
+
+        bbUpper.setData(payload.bbUpper || []);
+        bbLower.setData(payload.bbLower || []);
+
+
+        markersPlugin.setMarkers(payload.markers || []);
+
+
+        // =====================================
+// UPDATE RANGE LINES
+// =====================================
+
+updateRangeLines(
+    payload.ranges || [],
+    String(payload.timeframe || "M1").toUpperCase()
+);
+
+        // =====================================
+        // SUPPORT LINE
+        // =====================================
+
+        if (supportLine) {
+
+            candles.removePriceLine(supportLine);
+
+            supportLine = null;
+        }
+
+        if (
+            payload.support !== null &&
+            payload.support !== undefined &&
+            Number.isFinite(Number(payload.support))
+        ) {
+
+            supportLine = candles.createPriceLine({
+
+                price: Number(payload.support),
+
+                color: "#26a69a",
+
+                lineStyle: 2,
+                lineWidth: 1,
+
+                title: "Support"
+
+            });
+        }
+
+        // =====================================
+        // RESISTANCE LINE
+        // =====================================
+
+        if (resistanceLine) {
+
+            candles.removePriceLine(resistanceLine);
+
+            resistanceLine = null;
+        }
+
+        if (
+            payload.resistance !== null &&
+            payload.resistance !== undefined &&
+            Number.isFinite(Number(payload.resistance))
+        ) {
+
+            resistanceLine = candles.createPriceLine({
+
+                price: Number(payload.resistance),
+
+                color: "#ef5350",
+
+                lineStyle: 2,
+                lineWidth: 1,
+
+                title: "Resistance"
+
+            });
+        }
+
+        // =====================================
+        // STATUS
+        // =====================================
+
+        statusEl.textContent =
+            payload.status ||
+            `${payload.symbol || "GOLD"} ${payload.timeframe || ""} | ${incomingCandles.length} candles`;
+
+        // =====================================
+        // INITIAL HISTORY LOAD
+        // =====================================
+
+        if (!firstDataLoaded) {
+
+            // Fit the entire available historical dataset.
+            chart.timeScale().fitContent();
+
+            mainPriceScale.setAutoScale(true);
+
+            firstDataLoaded = true;
+
+            lastCandleCount = incomingCandles.length;
+
+            followLive = true;
+
+            statusEl.textContent =
+                `${payload.symbol || "GOLD"} ${payload.timeframe || ""} | ${incomingCandles.length} historical candles`;
+
+        } else {
+
+            // New data received.
+            lastCandleCount = incomingCandles.length;
+
+            if (followLive) {
+
+                chart.timeScale().scrollToRealTime();
+
+            }
+        }
+
+    };
+
+    // =========================================
+    // MOUSE WHEEL ZOOM
+    // =========================================
+    // Plot area = horizontal zoom.
+    // Right price scale = vertical zoom.
+    // =========================================
+
+    container.addEventListener("wheel", function (event) {
+
+        const rect = container.getBoundingClientRect();
+
+        const priceScaleWidth = mainPriceScale.width();
+
+        const overRightPriceScale =
+            event.clientX >= rect.right - priceScaleWidth &&
+            event.clientX <= rect.right &&
+            event.clientY >= rect.top &&
+            event.clientY <= rect.bottom;
+
+        event.preventDefault();
+        event.stopPropagation();
+        event.stopImmediatePropagation();
+
+        // =====================================
+        // VERTICAL ZOOM
+        // =====================================
+
+        if (overRightPriceScale) {
+
+            const currentRange =
+                mainPriceScale.getVisibleRange();
+
+            if (!currentRange) return;
+
+            const from = currentRange.from;
+            const to = currentRange.to;
+
+            if (
+                !Number.isFinite(from) ||
+                !Number.isFinite(to) ||
+                to <= from
+            ) {
+                return;
+            }
+
+            const mouseY = event.clientY - rect.top;
+
+            const mousePrice =
+                candles.coordinateToPrice(mouseY);
+
+            const anchor = Number.isFinite(mousePrice)
+                ? mousePrice
+                : (from + to) / 2;
+
+            const factor = event.deltaY < 0 ? 0.85 : 1.18;
+
+            const newFrom =
+                anchor - (anchor - from) * factor;
+
+            const newTo =
+                anchor + (to - anchor) * factor;
+
+            mainPriceScale.setAutoScale(false);
+
+            if (
+                Number.isFinite(newFrom) &&
+                Number.isFinite(newTo) &&
+                newTo > newFrom
+            ) {
+
+                mainPriceScale.setVisibleRange({
+                    from: newFrom,
+                    to: newTo
+                });
+
+            }
+
+            return;
+        }
+
+        // =====================================
+        // HORIZONTAL ZOOM
+        // =====================================
+
+        const plotWidth = Math.max(
+            1,
+            rect.width - priceScaleWidth
+        );
+
+        const mouseX = Math.max(
+            0,
+            Math.min(
+                plotWidth,
+                event.clientX - rect.left
+            )
+        );
+
+        const factor = event.deltaY < 0 ? 0.80 : 1.25;
+
+        zoomHorizontalAt(factor, mouseX);
+
+    }, {
+        passive: false,
+        capture: true
+    });
+
+    // =========================================
+    // GO TO LIVE
+    // =========================================
+
+    document.getElementById("follow").onclick = function () {
+
+        followLive = true;
+
+        chart.timeScale().scrollToRealTime();
+
+        statusEl.textContent = "Following live market";
+
+    };
+
+    // =========================================
+    // MANUAL HORIZONTAL NAVIGATION
+    // =========================================
+
+    chart.timeScale().subscribeVisibleLogicalRangeChange(function (range) {
+
+        if (!range) return;
+
+        const data = candles.data();
+
+        if (
+            data.length &&
+            range.to < data.length - 2
+        ) {
+
+            followLive = false;
+
+        }
+
+    });
+
+    // =========================================
+    // TIMEFRAME BUTTONS
+    // =========================================
+
+    document.querySelectorAll(".tf").forEach(button => {
+
+        button.addEventListener("click", function () {
+
+            document.querySelectorAll(".tf").forEach(b => {
+
+                b.classList.remove("active");
+
+            });
+
+            this.classList.add("active");
+
+            followLive = true;
+
+            // Reset initial-fit state for the new timeframe.
+            firstDataLoaded = false;
+
+            lastCandleCount = 0;
+
+            statusEl.textContent =
+                `Loading ${this.dataset.tf} history...`;
+
+            if (pyBridge) {
+
+                pyBridge.changeTimeframe(this.dataset.tf);
+
+            } else {
+
+                statusEl.textContent =
+                    "Python bridge not connected";
+
+            }
+
+        });
+
+    });
+
+    // =========================================
+    // FULL SCREEN
+    // =========================================
+
+    function requestFullscreen(enabled) {
+
+        isFullscreen = enabled;
+
+        document.getElementById("fullscreen").textContent =
+            enabled ? "Exit Full Screen" : "Full Screen";
+
+        if (pyBridge) {
+
+            pyBridge.setFullscreen(enabled);
+
+        }
+
+    }
+
+    document.getElementById("fullscreen").onclick = function () {
+
+        requestFullscreen(!isFullscreen);
+
+    };
+
+    document.addEventListener("keydown", function (event) {
+
+        if (
+            event.key === "Escape" &&
+            isFullscreen
+        ) {
+
+            requestFullscreen(false);
+
+        }
+
+    });
+
+    // =========================================
+    // RESIZE CHART
+    // =========================================
+
+    window.resizeChart = function () {
+
+        chart.applyOptions({
+
+            width: container.clientWidth,
+            height: container.clientHeight
+
+        });
+
+    };
+
+    const resizeObserver = new ResizeObserver(function () {
+
+        window.resizeChart();
+
+    });
+
+    resizeObserver.observe(container);
+
+    // =========================================
+    // QT WEB CHANNEL
+    // =========================================
+
+    if (
+        typeof QWebChannel !== "undefined" &&
+        typeof qt !== "undefined" &&
+        qt.webChannelTransport
+    ) {
+
+        new QWebChannel(
+            qt.webChannelTransport,
+            function (channel) {
+
+                pyBridge = channel.objects.pyBridge;
+
+                window.pyBridge = pyBridge;
+
+                statusEl.textContent =
+                    "Chart ready · Waiting for MT5";
+
+            }
+        );
+
+    } else {
+
+        statusEl.textContent =
+            "Chart ready · Python bridge unavailable";
+
+    }
+
+})();
+
+</script>
+
+</body>
+</html>
